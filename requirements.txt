@@ -1,0 +1,4 @@
+pymupdf==1.28.2
+sentence_transformers==6.0.1
+faiss-cpu==1.15.0
+accelerate==1.14.0
