@@ -3,7 +3,7 @@ import torch
 
 
 class QwenLLM:
-    def __init__(self, model_name="Qwen/Qwen3-8B"):
+    def __init__(self, model_name="Qwen/Qwen3-4B"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -32,13 +32,18 @@ class QwenLLM:
         prompt = f"""
 You are a document assistant.
 
-Answer the question using only the provided context.
+Answer the user's question using only the context below.
 
-If the answer is not present in the context, say:
-"The information was not found in the provided document."
+Rules:
+- Do not explain your reasoning
+- Do not output analysis
+- Do not output <think> tags
+- Give a direct and concise answer
+- If several items are mentioned, list them
+- If the answer is not present in the context, say:
+  "The information was not found in the provided document."
 
 Context:
-
 {context}
 
 Question:
@@ -65,7 +70,8 @@ Answer:
         text = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
-            add_generation_prompt=True
+            add_generation_prompt=True,
+            enable_thinking=False
         )
 
         inputs = self.tokenizer(
@@ -77,7 +83,8 @@ Answer:
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                do_sample=False
+                do_sample=False,
+                repetition_penalty=1.05
             )
 
         generated_tokens = outputs[0][
