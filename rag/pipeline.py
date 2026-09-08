@@ -1,3 +1,5 @@
+import os
+
 from rag.parser import parse_pdf
 from rag.chunker import create_chunks
 from rag.embeddings import EmbeddingModel
@@ -21,25 +23,72 @@ class RAGPipeline:
         self.chunks = []
         self.index_ready = False
 
-    def index_pdf(self, file_path):
-        # 1 PDF to pages
-        pages = parse_pdf(file_path)
+    def add_documents(self, file_paths):
+        if not file_paths:
+            raise ValueError(
+                "No documents provided."
+            )
 
-        # 2 pages to chunks
-        self.chunks = create_chunks(pages)
+        existing_chunks = self.vector_store.chunks
 
-        # 3 chunks to embeddings
+        if existing_chunks:
+            next_chunk_id = max(
+                chunk["chunk_id"]
+                for chunk in existing_chunks
+            ) + 1
+        else:
+            next_chunk_id = 0
+
+
+        new_chunks = []
+
+        total_pages = 0
+
+        processed_documents = []
+
+        for file_path in file_paths:
+            document_name = os.path.basename(
+                file_path
+            )
+
+            pages = parse_pdf(
+                file_path
+            )
+
+            total_pages += len(pages)
+
+            document_chunks = create_chunks(
+                pages=pages,
+                document_name=document_name,
+                start_chunk_id=next_chunk_id
+            )
+
+            new_chunks.extend(
+                document_chunks
+            )
+
+            next_chunk_id += len(
+                document_chunks
+            )
+
+            processed_documents.append(
+                document_name
+            )
+
+        if not new_chunks:
+            raise RuntimeError(
+                "No text chunks were created from the uploaded documents."
+            )
+
         embeddings = self.embedding_model.encode_chunks(
-            self.chunks
+            new_chunks
         )
 
-        # 4 embeddings to FAISS
-        self.vector_store.build_index(
+        self.vector_store.add(
             embeddings=embeddings,
-            chunks=self.chunks
+            chunks=new_chunks
         )
 
-        # 5 save FAISS index + chunks
         self.vector_store.save(
             "storage"
         )
@@ -47,14 +96,19 @@ class RAGPipeline:
         self.index_ready = True
 
         return {
-            "pages": len(pages),
-            "chunks": len(self.chunks)
+            "documents_added": len(file_paths),
+            "document_names": processed_documents,
+            "pages_added": total_pages,
+            "chunks_added": len(new_chunks),
+            "total_chunks": len(
+                self.vector_store.chunks
+            )
         }
 
     def ask(self, question):
         if not self.index_ready:
             raise RuntimeError(
-                "No PDF has been indexed yet."
+                "No documents have been indexed yet."
             )
 
         retrieved_chunks = self.retriever.retrieve(
@@ -68,7 +122,10 @@ class RAGPipeline:
 
         sources = sorted(
             {
-                chunk["page"]
+                (
+                    chunk["document"],
+                    chunk["page"]
+                )
                 for chunk in retrieved_chunks
             }
         )
@@ -84,6 +141,17 @@ class RAGPipeline:
             "storage"
         )
 
-        self.chunks = self.vector_store.chunks
-
         self.index_ready = True
+
+        return {
+            "chunks": len(
+                self.vector_store.chunks
+            ),
+            "documents": len(
+                {
+                    chunk["document"]
+                    for chunk
+                    in self.vector_store.chunks
+                }
+            )
+        }

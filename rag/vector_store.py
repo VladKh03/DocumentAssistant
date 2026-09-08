@@ -1,5 +1,6 @@
 import os
 import json
+
 import faiss
 import numpy as np
 
@@ -15,34 +16,79 @@ class VectorStore:
             dtype="float32"
         )
 
+        if len(embeddings) == 0:
+            raise ValueError("Cannot build FAISS index with no embeddings.")
+
         dimension = embeddings.shape[1]
 
         self.index = faiss.IndexFlatIP(dimension)
+
         self.index.add(embeddings)
 
-        self.chunks = chunks
+        self.chunks = list(chunks)
+
+    def add(self, embeddings, chunks):
+        embeddings = np.asarray(
+            embeddings,
+            dtype="float32"
+        )
+
+        if len(embeddings) == 0:
+            return
+
+        if self.index is None:
+            self.build_index(
+                embeddings=embeddings,
+                chunks=chunks
+            )
+            return
+
+        if embeddings.shape[1] != self.index.d:
+            raise ValueError(
+                f"Embedding dimension mismatch: "
+                f"FAISS expects {self.index.d}, "
+                f"received {embeddings.shape[1]}"
+            )
+
+        self.index.add(embeddings)
+
+        self.chunks.extend(chunks)
 
     def search(self, query_embedding, top_k=5):
         if self.index is None:
-            raise RuntimeError("FAISS index is not initialized.")
+            raise RuntimeError(
+                "FAISS index is not initialized."
+            )
+
+        if self.index.ntotal == 0:
+            return []
 
         query_embedding = np.asarray(
             [query_embedding],
             dtype="float32"
         )
 
+        k = min(
+            top_k,
+            self.index.ntotal
+        )
+
         scores, indices = self.index.search(
             query_embedding,
-            top_k
+            k
         )
 
         results = []
 
-        for score, idx in zip(scores[0], indices[0]):
+        for score, idx in zip(
+            scores[0],
+            indices[0]
+        ):
             if idx == -1:
                 continue
 
             chunk = self.chunks[idx].copy()
+
             chunk["score"] = float(score)
 
             results.append(chunk)
@@ -51,7 +97,9 @@ class VectorStore:
 
     def save(self, storage_dir="storage"):
         if self.index is None:
-            raise RuntimeError("No FAISS index to save.")
+            raise RuntimeError(
+                "No FAISS index to save."
+            )
 
         os.makedirs(
             storage_dir,
@@ -85,9 +133,6 @@ class VectorStore:
                 indent=2
             )
 
-        print(f"FAISS index saved to: {index_path}")
-        print(f"Chunks saved to: {chunks_path}")
-
     def load(self, storage_dir="storage"):
         index_path = os.path.join(
             storage_dir,
@@ -120,5 +165,9 @@ class VectorStore:
         ) as f:
             self.chunks = json.load(f)
 
-        print(f"Loaded {len(self.chunks)} chunks")
-        print(f"FAISS vectors: {self.index.ntotal}")
+        if self.index.ntotal != len(self.chunks):
+            raise RuntimeError(
+                "FAISS index and chunks.json are out of sync: "
+                f"{self.index.ntotal} vectors vs "
+                f"{len(self.chunks)} chunks."
+            )

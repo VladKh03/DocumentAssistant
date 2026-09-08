@@ -1,13 +1,17 @@
-def create_chunks(pages, chunk_size=300, overlap=50):
+def create_chunks(
+    pages,
+    document_name,
+    chunk_size=300,
+    overlap=50,
+    start_chunk_id=0
+):
     chunks = []
 
-    chunk_id = 0
+    chunk_id = start_chunk_id
 
     for page in pages:
         page_number = page["page"]
-        text = page["text"]
-
-        words = text.split()
+        words = page["text"].split()
 
         start = 0
 
@@ -20,6 +24,7 @@ def create_chunks(pages, chunk_size=300, overlap=50):
             if chunk_text.strip():
                 chunks.append({
                     "chunk_id": chunk_id,
+                    "document": document_name,
                     "page": page_number,
                     "text": chunk_text
                 })
