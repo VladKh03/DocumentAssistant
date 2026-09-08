@@ -99,6 +99,33 @@ def ask_document(question):
             ""
         )
 
+def debug_retrieval(question):
+    if not question.strip():
+        return "Please enter a question."
+
+    try:
+        results = rag.retriever.retrieve(question)
+
+        if not results:
+            return "No results found."
+
+        output = []
+
+        for i, result in enumerate(results, start=1):
+            output.append(
+                f"Result {i}\n"
+                f"Document: {result.get('document', 'Unknown')}\n"
+                f"Page: {result['page']}\n"
+                f"Score: {result['score']:.4f}\n\n"
+                f"{result['text']}\n"
+                f"{'-' * 80}"
+            )
+
+        return "\n\n".join(output)
+
+    except Exception as e:
+        return f"Error:\n{str(e)}"
+
 with gr.Blocks(
     title="AI Document Assistant"
 ) as demo:
@@ -114,7 +141,6 @@ with gr.Blocks(
 
     with gr.Tabs():
         with gr.Tab("Chat"):
-
             question = gr.Textbox(
                 label="Question",
                 placeholder=(
@@ -156,9 +182,8 @@ with gr.Blocks(
                     sources
                 ]
             )
-            
-        with gr.Tab("Documents"):
 
+        with gr.Tab("Documents"):
             documents = gr.File(
                 label="Upload PDFs",
                 file_types=[
@@ -181,4 +206,33 @@ with gr.Blocks(
                 fn=process_documents,
                 inputs=documents,
                 outputs=status
+            )
+        
+        with gr.Tab("Retrieval"):
+            retrieval_question = gr.Textbox(
+                label="Question",
+                placeholder="Enter a question to inspect retrieval...",
+                lines=3
+            )
+
+            retrieval_button = gr.Button(
+                "Search",
+                variant="primary"
+            )
+
+            retrieval_output = gr.Textbox(
+                label="Top retrieved chunks",
+                lines=25
+            )
+
+            retrieval_button.click(
+                fn=debug_retrieval,
+                inputs=retrieval_question,
+                outputs=retrieval_output
+            )
+
+            retrieval_question.submit(
+                fn=debug_retrieval,
+                inputs=retrieval_question,
+                outputs=retrieval_output
             )
