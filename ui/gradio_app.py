@@ -4,6 +4,13 @@ from rag.pipeline import RAGPipeline
 
 rag = RAGPipeline(top_k=5)
 
+try:
+    rag.load_index()
+    print("Existing index loaded successfully")
+except FileNotFoundError:
+    print("No saved index found")
+except Exception as e:
+    print(f"Failed to load saved index: {e}")
 
 def process_document(file):
     if file is None:

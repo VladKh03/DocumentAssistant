@@ -39,6 +39,11 @@ class RAGPipeline:
             chunks=self.chunks
         )
 
+        # 5 save FAISS index + chunks
+        self.vector_store.save(
+            "storage"
+        )
+
         self.index_ready = True
 
         return {
@@ -73,3 +78,12 @@ class RAGPipeline:
             "sources": sources,
             "chunks": retrieved_chunks
         }
+    
+    def load_index(self):
+        self.vector_store.load(
+            "storage"
+        )
+
+        self.chunks = self.vector_store.chunks
+
+        self.index_ready = True
